@@ -39,21 +39,13 @@ predictions_description = pd.read_csv(predictions_file, delimiter=';', names=['u
 ##
 ## COLLABORATIVE FILTERING
 ##
+## In hindishgt we want movie-movie collab. filtering.
+## For movie x find two other most-similar movies .
+## Predict rating x based on neighbours.
 #####
 
 def predict_collaborative_filtering(movies, users, ratings, predictions):
     # TO COMPLETE
-
-    pass
-
-
-def construct_utility_matrix(matrixA, matrixB):
-    """
-    Constructs a Utility Matrix from two matrices.
-    :param matrixA: DataFrame
-    :param matrixB: DataFrame
-    :return: DataFrame
-    """
 
     pass
 
@@ -72,9 +64,26 @@ def central_cosine_distance(vecA, vecB):
 
     return sum_numerator/sum_denominator
 
-print(central_cosine_distance([2, 0, 0, 1, 3],
-                              [1, 0, 2, 3, 0]))
+print(central_cosine_distance([-2.6, 0, -0.6, 0, 0, 1.4, 0, 0, 1.4, 0, 0.4, 0],
+                              [-2.6, 0, -0.6, 0, -0.6, 0, 0, -1.6, 0, 0, 0.4, 0]))
 
+
+def predict_rating(s, r):
+    """
+    Predict rating by taking weighted average of neighbour ratings.
+    :param s: list
+        Closest neighbour similarities.
+    :param r:
+        Closes neighbour actual ratings for item we want to predict.
+    :return:
+    """
+
+    sumNumerator = np.sum(np.dot(s, r).ravel())
+    sumDenominator = np.sum(s)
+
+    return sumNumerator/sumDenominator
+
+print(predict_rating([0.41, 0.59], [2, 3]))
 
 #####
 ##
