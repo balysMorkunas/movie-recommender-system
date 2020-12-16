@@ -34,6 +34,12 @@ ratings_description = pd.read_csv(ratings_file, delimiter=';',
                                   names=['userID', 'movieID', 'rating'])
 predictions_description = pd.read_csv(predictions_file, delimiter=';', names=['userID', 'movieID'], header=None)
 
+# The ratings dataframe is missing some movies - meaning some movies were not rated by anyone.
+# We fix this by joining movies dataframe with ratings dataframe and filling the nan values with 0's.
+ratings_full = (movies_description.set_index("movieID")).join(ratings_description.pivot(index='movieID', columns='userID', values='rating'))
+
+ratings_full.drop(['year', 'movie'], axis=1, inplace=True)
+ratings_full = ratings_full.fillna(0)
 
 #####
 ##
