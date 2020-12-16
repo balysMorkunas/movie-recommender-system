@@ -100,16 +100,19 @@ def central_cosine_distance(vecA, vecB):
     :param vecB: list
     :return: float
     """
-    meanA = np.mean(vecA)
-    meanB = np.mean(vecB)
-    sum_numerator = np.sum((vecA - meanA) * (vecB - meanB))
-    sum_denominator = np.sqrt(np.sum((vecA - meanA) ** 2)) * np.sqrt(np.sum((vecB - meanB) ** 2))
+    # meanA = np.mean(vecA)
+    # meanB = np.mean(vecB)
+    # sum_numerator = np.sum((vecA - meanA) * (vecB - meanB))
+    # sum_denominator = np.sqrt(np.sum((vecA - meanA) ** 2)) * np.sqrt(np.sum((vecB - meanB) ** 2))
+    #
+    # return sum_numerator/sum_denominator
 
-    return sum_numerator/sum_denominator
+    # Visa sita padaro np.corrcoef funkcija
+    return np.corrcoef(vecA, vecB)
 
-print(central_cosine_distance([-2.6, 0, -0.6, 0, 0, 1.4, 0, 0, 1.4, 0, 0.4, 0],
-                              [-2.6, 0, -0.6, 0, -0.6, 0, 0, -1.6, 0, 0, 0.4, 0]))
 
+# print(central_cosine_distance([-2.6, 0, -0.6, 0, -0.6, 0, 0, -1.6, 0, 0, 0.4, 0],
+#                               [-2.6, 0, -0.6, 0, -0.6, 0, 0, -1.6, 0, 0, 0.4, 1]))
 
 def predict_rating(s, r):
     """
