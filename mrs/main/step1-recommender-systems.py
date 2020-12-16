@@ -51,9 +51,46 @@ ratings_full = ratings_full.fillna(0)
 #####
 
 def predict_collaborative_filtering(movies, users, ratings, predictions):
-    # TO COMPLETE
+    # 1. Create a user/movie matrix containing all of the ratings
 
-    pass
+    # Collaborative filtering can be done in 2 ways: user-item and item-item.
+    # An easy way to switch between User-Item CF and Item-Item CF:
+    user_item = True
+
+    # If user_item is true, we have a matrix where rows are users and columns are movies. The first row of this matrix has ratings of user 1 for movies 1-3695
+    # If user_item is false, then we have a matrix where rows are movies and columns are users. The first row of this matrix has ratings of movie 1 for users 6040
+
+    if(user_item):
+        ratings_matrix = ratings.to_numpy().T
+    else:
+        ratings_matrix = ratings.to_numpy()
+
+    # 2. Compute the utility matrix containing the similarities between users (user_item) or items (item_item)
+
+    # Value of user_item similarity_matrix[i][j] = similarity between user i and user j
+    # similarity_matrix = np.corrcoef(ratings_matrix)
+
+    if (user_item):
+        similarity_matrix = ratings_matrix.dot(ratings_matrix.T) + 1e-9
+    else:
+        similarity_matrix = ratings_matrix.T.dot(ratings_matrix) + 1e-9
+    norms = np.array([np.sqrt(np.diagonal(similarity_matrix))])
+    similarity_matrix = similarity_matrix / norms / norms.T
+
+
+    # 3. Compute predictions
+    if(user_item):
+        prediction_matrix = similarity_matrix.dot(ratings_matrix)/np.array([np.abs(similarity_matrix).sum(axis=1)]).T
+    else:
+        prediction_matrix = (ratings_matrix.dot(similarity_matrix) / np.array([np.abs(similarity_matrix).sum(axis=1)])).T
+
+    # Creating the final predictions format
+    number_predictions = len(predictions)
+    final_predictions = [[idx+1, prediction_matrix[predictions.userID[idx]-1, predictions.movieID[idx]-1] ] for idx in range(0, number_predictions )]
+
+    return final_predictions
+
+print(predict_collaborative_filtering(movies_description, users_description, ratings_full, predictions_description)[0])
 
 
 def central_cosine_distance(vecA, vecB):
