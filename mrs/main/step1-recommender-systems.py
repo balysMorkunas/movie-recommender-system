@@ -45,7 +45,7 @@ ratings_full = ratings_full.fillna(0)
 ##
 ## COLLABORATIVE FILTERING
 ##
-## In hindishgt we want movie-movie collab. filtering.
+## In hindsight we want movie-movie collab. filtering.
 ## For movie x find two other most-similar movies .
 ## Predict rating x based on neighbours.
 #####
