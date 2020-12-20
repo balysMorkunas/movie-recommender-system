@@ -34,85 +34,100 @@ ratings_description = pd.read_csv(ratings_file, delimiter=';',
                                   names=['userID', 'movieID', 'rating'])
 predictions_description = pd.read_csv(predictions_file, delimiter=';', names=['userID', 'movieID'], header=None)
 
-# The ratings dataframe is missing some movies - meaning some movies were not rated by anyone.
-# We fix this by joining movies dataframe with ratings dataframe and filling the nan values with 0's.
-ratings_full = (movies_description.set_index("movieID")).join(ratings_description.pivot(index='movieID', columns='userID', values='rating'))
-
-ratings_full.drop(['year', 'movie'], axis=1, inplace=True)
-ratings_full = ratings_full.fillna(0)
-
 #####
 ##
 ## COLLABORATIVE FILTERING
 ##
-## In hindsight we want movie-movie collab. filtering.
-## For movie x find two other most-similar movies .
-## Predict rating x based on neighbours.
+##
 #####
 
 def predict_collaborative_filtering(movies, users, ratings, predictions):
+    # 0. Create the full ratings matrix - fill the missing movies with 0s
+
+    # The ratings dataframe is missing some movies - meaning some movies were not rated by anyone.
+    # We fix this by joining movies dataframe with ratings dataframe and filling the nan values with 0's.
+    ratings = (movies_description.set_index("movieID")).join(
+        ratings.pivot(index='movieID', columns='userID', values='rating'))
+    ratings.drop(['year', 'movie'], axis=1, inplace=True)
+    ratings = ratings.fillna(0)
+
+
     # 1. Create a user/movie matrix containing all of the ratings
 
     # Collaborative filtering can be done in 2 ways: user-item and item-item.
-    # An easy way to switch between User-Item CF and Item-Item CF:
-    user_item = True
+    # In this function we do user-item CF.
+    ratings_matrix = ratings.to_numpy().T
 
-    # If user_item is true, we have a matrix where rows are users and columns are movies. The first row of this matrix has ratings of user 1 for movies 1-3695
-    # If user_item is false, then we have a matrix where rows are movies and columns are users. The first row of this matrix has ratings of movie 1 for users 6040
-
-    if(user_item):
-        ratings_matrix = ratings.to_numpy().T
-    else:
-        ratings_matrix = ratings.to_numpy()
 
     # 2. Compute the utility matrix containing the similarities between users (user_item) or items (item_item)
 
     # Value of user_item similarity_matrix[i][j] = similarity between user i and user j
-    # similarity_matrix = np.corrcoef(ratings_matrix)
-
-    if (user_item):
-        similarity_matrix = ratings_matrix.dot(ratings_matrix.T) + 1e-9
-    else:
-        similarity_matrix = ratings_matrix.T.dot(ratings_matrix) + 1e-9
-    norms = np.array([np.sqrt(np.diagonal(similarity_matrix))])
-    similarity_matrix = similarity_matrix / norms / norms.T
+    similarity_matrix = np.corrcoef(ratings_matrix)
 
 
     # 3. Compute predictions
-    if(user_item):
-        prediction_matrix = similarity_matrix.dot(ratings_matrix)/np.array([np.abs(similarity_matrix).sum(axis=1)]).T
-    else:
-        prediction_matrix = (ratings_matrix.dot(similarity_matrix) / np.array([np.abs(similarity_matrix).sum(axis=1)])).T
+
+    # "User-based nearest neighbor" section of this link:
+    # https://medium.com/towards-artificial-intelligence/recommendation-system-in-depth-tutorial-with-python-for-netflix-using-collaborative-filtering-533ff8a0e444
+
+    # Get the average rating of each user
+    avgs = ratings_description.groupby('userID').agg(['mean'])
+    avgs.drop(['movieID'], axis=1, inplace=True)
+    user_rating_avgs = avgs.to_numpy()
+
+    # Predict the score of unknown rating. Function given in the link above
+    def prediction_score (user, movie):
+        user_avg = user_rating_avgs[user]
+        sum_numer = 0
+        # Add a small number to denominator to avoid division by 0
+        sum_denomin = 1e-9
+
+        for idx, user_ratings in enumerate(ratings_matrix):
+            # Skip over users that have not rated the movie in question
+            if(user_ratings[movie] == 0):
+                pass
+            # Skip over the user we are predicting for, since he would not have rated the movie
+            elif(idx == user):
+                pass
+            else:
+                sum_numer += similarity_matrix[user, idx]*(user_ratings[movie] -user_rating_avgs[idx])
+                sum_denomin += similarity_matrix[user, idx]
+
+        return user_avg + sum_numer/sum_denomin
+
+    # # Another approach might be possible:
+    # # Global baseline hybrid
+    #
+    #
+    # # Get the average rating of each movie
+    # avgs = ratings.groupby('movieID').agg(['mean'])
+    # avgs.drop(['userID'], axis=1, inplace=True)
+    # movie_rating_avgs = avgs.to_numpy()
+    #
+    # total_avg = np.mean(movie_rating_avgs)
+    #
+    # def prediction_score (user, movie):
+    #     user_avg = total_avg + user_rating_avgs[user] - total_avg + movie_rating_avgs[movie] - total_avg
+    #     sum_numer = 0
+    #     sum_denomin = 1e-9
+    #     for idx, user_ratings in enumerate(ratings_matrix):
+    #         if(user_ratings[movie] == 0):
+    #             pass
+    #         elif(idx == user):
+    #             pass
+    #         else:
+    #             sum_numer += similarity_matrix[user, idx]*(user_ratings[movie] - (total_avg + user_rating_avgs[idx] - total_avg + movie_rating_avgs[movie] - total_avg))
+    #             sum_denomin += similarity_matrix[user, idx]
+    #
+    #     return user_avg + sum_numer/sum_denomin
 
     # Creating the final predictions format
     number_predictions = len(predictions)
-    final_predictions = [[idx+1, prediction_matrix[predictions.userID[idx]-1, predictions.movieID[idx]-1] ] for idx in range(0, number_predictions )]
-
+    final_predictions = [[idx+1, prediction_score(predictions.userID[idx]-1, predictions.movieID[idx]-1)] for idx in range(0, number_predictions )]
     return final_predictions
 
-print(predict_collaborative_filtering(movies_description, users_description, ratings_full, predictions_description)[0])
+print(predict_collaborative_filtering(movies_description, users_description, ratings_description, predictions_description)[0])
 
-
-def central_cosine_distance(vecA, vecB):
-    """
-    Calculates Pearsons Correlation between two vectors.
-    :param vecA: list
-    :param vecB: list
-    :return: float
-    """
-    # meanA = np.mean(vecA)
-    # meanB = np.mean(vecB)
-    # sum_numerator = np.sum((vecA - meanA) * (vecB - meanB))
-    # sum_denominator = np.sqrt(np.sum((vecA - meanA) ** 2)) * np.sqrt(np.sum((vecB - meanB) ** 2))
-    #
-    # return sum_numerator/sum_denominator
-
-    # Visa sita padaro np.corrcoef funkcija
-    return np.corrcoef(vecA, vecB)
-
-
-# print(central_cosine_distance([-2.6, 0, -0.6, 0, -0.6, 0, 0, -1.6, 0, 0, 0.4, 0],
-#                               [-2.6, 0, -0.6, 0, -0.6, 0, 0, -1.6, 0, 0, 0.4, 1]))
 
 def predict_rating(s, r):
     """
@@ -129,7 +144,7 @@ def predict_rating(s, r):
 
     return sumNumerator/sumDenominator
 
-print(predict_rating([0.41, 0.59], [2, 3]))
+# print(predict_rating([0.41, 0.59], [2, 3]))
 
 #####
 ##
@@ -176,14 +191,19 @@ def predict_random(movies, users, ratings, predictions):
 #####    
 
 ## //!!\\ TO CHANGE by your prediction function
-predictions = predict_collaborative_filtering(movies_description, users_description, ratings_full, predictions_description)
 
-# Save predictions, should be in the form 'list of tuples' or 'list of lists'
-with open(submission_file, 'w') as submission_writer:
-    # Formates data
-    predictions = [map(str, row) for row in predictions]
-    predictions = [','.join(row) for row in predictions]
-    predictions = 'Id,Rating\n' + '\n'.join(predictions)
 
-    # Writes it dowmn
-    submission_writer.write(predictions)
+# Uncomment only when outputting submission
+
+
+# predictions = predict_collaborative_filtering(movies_description, users_description, ratings_description, predictions_description)
+#
+# # Save predictions, should be in the form 'list of tuples' or 'list of lists'
+# with open(submission_file, 'w') as submission_writer:
+#     # Formates data
+#     predictions = [map(str, row) for row in predictions]
+#     predictions = [','.join(row) for row in predictions]
+#     predictions = 'Id,Rating\n' + '\n'.join(predictions)
+#
+#     # Writes it dowmn
+#     submission_writer.write(predictions)
