@@ -174,6 +174,7 @@ def predict_rating(s, r):
 #####
 
 #-------------------------------------------------Util---------------------------------------------------
+
 def grid_search(samples, R, b, steps=500, gamma=0.01, lamda=0.01, rmse = False, bias = False):
     """
     Perfomrs grid search to find the best pair of hyper paramters k and learning_rate
@@ -297,7 +298,7 @@ def matrix_als(R, P, Q, k, steps=100, gamma=0.01, rmse = False, bias = False):
 #-----------------------------------------------SDG-----------------------------------------------------------
 
 
-def matrix_factr(samples, R, P, Q, b, b_u, b_i, steps=300, gamma=0.01, lamda=0.01, rmse = False, bias = False):
+def matrix_factr(samples, R, P, Q, b, b_u, b_i, steps=200, gamma=0.01, lamda=0.01, rmse = False, bias = False):
     '''
     R: Ratings matrix
     P: |users| * k - user feature matrix
@@ -327,7 +328,7 @@ def matrix_factr(samples, R, P, Q, b, b_u, b_i, steps=300, gamma=0.01, lamda=0.0
             P[i,:] += gamma * (e * Q[:,j] - lamda * P[i,:])
             Q[:,j] += gamma * (e * p_old - lamda * Q[:,j])
 
-        if (step + 1) % 10 == 0 and rmse:
+        if (step + 1) % 10 == 0: #and rmse:
             rmse_new = get_rmse(R, P, Q, b, b_u, b_i, bias)
             # Check for convergence and break if new RMSE is bigger than old
             if np.abs(rmse_new - rmse_old) < 0.0001:
@@ -352,7 +353,7 @@ def predict_latent_factors_with_bias(movies, users, ratings, predictions):
     # m: number of movies
     m = len(R[0])
     # k: number of features
-    k = 25
+    k = 5
     # bias: do we want to include bias in our computation
     bias_value = True
 
@@ -374,11 +375,9 @@ def predict_latent_factors_with_bias(movies, users, ratings, predictions):
         if R[i][j] > 0
     ]
 
-    newP, newQ, newB_u, newB_i = matrix_factr(samples, R, P, Q, b, b_u, b_i, rmse=True, bias=bias_value)
-    # newP, newQ = matrix_als(R, P, Q, k, rmse=True, bias=bias_value)
+    newP, newQ, newB_u, newB_i = matrix_factr(samples, R, P, Q, b, b_u, b_i, rmse=False, bias=bias_value)
 
     newR = predict_all(newP, newQ, b, newB_u, newB_i, bias=bias_value)
-    # newR = predict_all(newP, newQ.T, b, b_u, b_i)
 
     number_predictions = len(predictions)
     result = [[idx+1, newR[predictions.movieID[idx]-1, predictions.userID[idx]-1]] for idx in range(0, number_predictions)]
@@ -454,7 +453,8 @@ def predict_latent_factors_ALS(movies, users, ratings, predictions):
 
 
 def predict_final(movies, users, ratings, predictions):
-    # TO COMPLETE
+
+    result = predict_latent_factors_with_bias(movies_description, users_description, ratings, predictions_description)
 
     pass
 
@@ -468,7 +468,7 @@ def predict_final(movies, users, ratings, predictions):
 
 
 # //!!\\ TO CHANGE by your prediction function
-predictions = predict_latent_factors_with_bias(movies_description, users_description, ratings, predictions_description)
+predictions = predict_final(movies_description, users_description, ratings, predictions_description)
 
 # Save predictions, should be in the form 'list of tuples' or 'list of lists'
 with open(submission_file, 'w') as submission_writer:
