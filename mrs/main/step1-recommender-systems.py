@@ -380,7 +380,11 @@ def predict_latent_factors_with_bias(movies, users, ratings, predictions):
     newR = predict_all(newP, newQ, b, newB_u, newB_i, bias=bias_value)
 
     number_predictions = len(predictions)
-    result = [[idx+1, newR[predictions.movieID[idx]-1, predictions.userID[idx]-1]] for idx in range(0, number_predictions)]
+    # result = [[idx+1, newR[predictions.movieID[idx]-1, predictions.userID[idx]-1]] for idx in range(0, number_predictions)]
+    # return result
+
+    # For combiner
+    result = [newR[predictions.movieID[idx]-1, predictions.userID[idx]-1] for idx in range(0, number_predictions)]
     return result
 
 
