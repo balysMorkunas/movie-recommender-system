@@ -298,7 +298,7 @@ def matrix_als(R, P, Q, k, steps=100, gamma=0.01, rmse = False, bias = False):
 #-----------------------------------------------SDG-----------------------------------------------------------
 
 
-def matrix_factr(samples, R, P, Q, b, b_u, b_i, steps=200, gamma=0.01, lamda=0.01, rmse = False, bias = False):
+def matrix_factr(samples, R, P, Q, b, b_u, b_i, steps=200, gamma=0.005, lamda=0.01, rmse = False, bias = False):
     '''
     R: Ratings matrix
     P: |users| * k - user feature matrix
