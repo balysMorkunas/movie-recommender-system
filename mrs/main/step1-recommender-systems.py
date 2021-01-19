@@ -1,6 +1,5 @@
 import numpy as np
 import pandas as pd
-import os.path
 
 # -*- coding: utf-8 -*-
 """
@@ -51,7 +50,9 @@ predictions_description = pd.read_csv(predictions_file, delimiter=';',
 ##
 #####
 
-def predict_collaborative_filtering_useritem(movies, users, ratings, predictions, similarity):
+#-------------------------------------------------User-Based CF---------------------------------------------------
+
+def predict_collaborative_filtering_useritem(ratings, predictions, similarity):
     # 0. Create the full ratings matrix - fill the missing movies with 0s
 
     # The ratings dataframe is missing some movies - meaning some movies were not rated by anyone.
@@ -70,6 +71,7 @@ def predict_collaborative_filtering_useritem(movies, users, ratings, predictions
 
 
     # 2. Compute the utility matrix containing the similarities between users
+    # Idea from https://github.com/john-x-jiang/Recommending-System/blob/master/src/similarity_functions.py
 
     # Pearson correlation
     similarity_matrix = None
@@ -79,22 +81,25 @@ def predict_collaborative_filtering_useritem(movies, users, ratings, predictions
 
     # Cosine for cosine and adj cosine similarities
     def cosine(a, b):
+        # Vector multiplication
         p = a*b
-        c, d = p / b, p / a
-        c[np.isnan(c)] = 0
-        d[np.isnan(d)] = 0
+        # Norm multiplication
+        c = p / b
+        d = p / a
         norm = np.linalg.norm(c) * np.linalg.norm(d)
+        # Division by 0
         if not norm:
             return 0
+        # Return cos
         return np.dot(a, b) / norm
-
 
     # # Cosine similarity
     def cosineMatrix(ratings):
-        nousers = np.shape(ratings)[1]
-        sim = np.zeros((nousers, nousers))
-        for i in  tqdm(range(nousers)):
-            for j in  range(i, nousers):
+        no_users = np.shape(ratings)[1]
+        sim = np.zeros((no_users, no_users))
+        # Simple cosine similarity
+        for i in range(no_users):
+            for j in range(i, no_users):
                 sim[i][j] = cosine(ratings[:, i], ratings[:, j])
                 sim[j][i] = sim[i][j]
         return sim
@@ -105,21 +110,24 @@ def predict_collaborative_filtering_useritem(movies, users, ratings, predictions
 
     # Adjusted cosine similarity
     def adjustedCosineMatrix(ratings):
-        nousers = np.shape(ratings)[0]
-        noitems = np.shape(ratings)[1]
-        sim = np.zeros((noitems, noitems))
-        user_avg_rating = np.zeros(nousers)
+        no_users = np.shape(ratings)[0]
+        no_items = np.shape(ratings)[1]
+        sim = np.zeros((no_items, no_items))
+        # Calculate the average user rating to adjust for it
+        user_avg = np.zeros(no_users)
         zero_items = 0
-        for u in tqdm(range(nousers)):
-            for i in range(noitems):
+        # Take care of users that didnt rate items
+        for u in range(no_users):
+            for i in range(no_items):
                 if (ratings[u, i] == 0):
                     zero_items += 1
-                user_avg_rating[u] += ratings[u, i]
-            user_avg_rating[u] /= zero_items
-        for i in tqdm(range(noitems)):
-            for j in range(i, noitems):
-                sim[i][j] = cosine(ratings[:, i] - user_avg_rating,
-                                   ratings[:, j] - user_avg_rating)
+                user_avg[u] += ratings[u, i]
+            user_avg[u] /= zero_items
+        # Calculate the similarity adjusting to user avg
+        for i in range(no_items):
+            for j in range(i, no_items):
+                sim[i][j] = cosine(ratings[:, i] - user_avg,
+                                   ratings[:, j] - user_avg)
                 sim[j][i] = sim[i][j]
         return sim
 
@@ -148,15 +156,46 @@ def predict_collaborative_filtering_useritem(movies, users, ratings, predictions
         return sum_numer/sum_denomin
 
 
+    # Function 2
+    # # Another approach might be possible:
+    # # Global baseline hybrid
+
     # # Get the average rating of each user
     avgs = ratings_description.groupby('userID').agg(['mean'])
     avgs.drop(['movieID'], axis=1, inplace=True)
     user_rating_avgs = avgs.to_numpy()
-    print("user rating avgs", user_rating_avgs.shape)
 
-    # Function 2
-    # Predict the score of unknown rating. Function given in the link above
+    # Get the average rating of each movie
+    # Copy the ratings matrix and calculate the mean over movies while not taking 0's in consideration.
+    ratings_matrix_copy = ratings_matrix
+    ratings_matrix_copy[ratings_matrix_copy == 0] = np.nan
+    ratings_matrix_copy = ratings_matrix_copy.T
+    movie_rating_avgs = np.nanmean(ratings_matrix_copy[:, 1:], axis=1)
+
+    # Convert the nans back into 0's
+    movie_rating_avgs[np.isnan(movie_rating_avgs)] = 0
+    ratings_matrix_copy[np.isnan(ratings_matrix_copy)] = 0
+
+    # Use user avgs for total avg
+    total_avg = np.mean(user_rating_avgs)
+
     def prediction_scoref2 (user, movie):
+        user_avg = total_avg + user_rating_avgs[user] - total_avg + movie_rating_avgs[movie] - total_avg
+        sum_numer = 0
+        sum_denomin = 1e-9
+        for idx, user_ratings in enumerate(ratings_matrix):
+            if(user_ratings[movie] == 0):
+                pass
+            elif(idx == user):
+                pass
+            else:
+                sum_numer += similarity_matrix[user, idx]*(user_ratings[movie] - (total_avg + user_rating_avgs[idx] - total_avg + movie_rating_avgs[movie] - total_avg))
+                sum_denomin += similarity_matrix[user, idx]
+        return user_avg + sum_numer/sum_denomin
+
+    # Function 3
+    # Predict the score of unknown rating. Function given in the link above
+    def prediction_scoref3 (user, movie):
         user_avg = user_rating_avgs[user]
         sum_numer = 0
         # Add a small number to denominator to avoid division by 0
@@ -176,55 +215,18 @@ def predict_collaborative_filtering_useritem(movies, users, ratings, predictions
         return user_avg + sum_numer/sum_denomin
 
 
-    # Function 3
-    # # Another approach might be possible:
-    # # Global baseline hybrid
-    #
-    # Get the average rating of each movie
-    # Copy the ratings matrix and calculate the mean over movies while not taking 0's in consideration.
-    ratings_matrix_copy = ratings_matrix
-    ratings_matrix_copy[ratings_matrix_copy == 0] = np.nan
-    ratings_matrix_copy = ratings_matrix_copy.T
-    movie_rating_avgs = np.nanmean(ratings_matrix_copy[:, 1:], axis=1)
-
-    # Convert the nans back into 0's
-    movie_rating_avgs[np.isnan(movie_rating_avgs)] = 0
-    ratings_matrix_copy[np.isnan(ratings_matrix_copy)] = 0
-
-    # Use user avgs for total avg
-    total_avg = np.mean(user_rating_avgs)
-
-    print("total avg", total_avg)
-    print(movie_rating_avgs[1])
-    print(user_rating_avgs[1]+ total_avg + movie_rating_avgs[1])
-
-
-    def prediction_scoref3 (user, movie):
-        user_avg = total_avg + user_rating_avgs[user] - total_avg + movie_rating_avgs[movie] - total_avg
-        sum_numer = 0
-        sum_denomin = 1e-9
-        for idx, user_ratings in enumerate(ratings_matrix):
-            if(user_ratings[movie] == 0):
-                pass
-            elif(idx == user):
-                pass
-            else:
-                sum_numer += similarity_matrix[user, idx]*(user_ratings[movie] - (total_avg + user_rating_avgs[idx] - total_avg + movie_rating_avgs[movie] - total_avg))
-                sum_denomin += similarity_matrix[user, idx]
-        return user_avg + sum_numer/sum_denomin
-
     # Creating the final predictions format
     number_predictions = len(predictions)
     # 3 predictions for each of the predictor functions.
-    final_predictionsf1 = [[idx+1, prediction_scoref1(predictions.userID[idx]-1, predictions.movieID[idx]-1)] for idx in tqdm(range(0, number_predictions ))]
-    final_predictionsf2 = [[idx+1, prediction_scoref2(predictions.userID[idx]-1, predictions.movieID[idx]-1)] for idx in tqdm(range(0, number_predictions ))]
-    final_predictionsf3 = [[idx+1, prediction_scoref3(predictions.userID[idx]-1, predictions.movieID[idx]-1)] for idx in tqdm(range(0, number_predictions ))]
+    final_predictionsf1 = [[idx+1, prediction_scoref1(predictions.userID[idx]-1, predictions.movieID[idx]-1)] for idx in range(0, number_predictions )]
+    final_predictionsf2 = [[idx+1, prediction_scoref2(predictions.userID[idx]-1, predictions.movieID[idx]-1)] for idx in range(0, number_predictions )]
+    final_predictionsf3 = [[idx+1, prediction_scoref3(predictions.userID[idx]-1, predictions.movieID[idx]-1)] for idx in range(0, number_predictions )]
 
     return final_predictionsf1, final_predictionsf2, final_predictionsf3
 
+#-------------------------------------------------Item-Based CF---------------------------------------------------
 
-
-def predict_collaborative_filtering_itemitem(movies, users, ratings, predictions, similarity):
+def predict_collaborative_filtering_itemitem(ratings, predictions, similarity):
     # 0. Create the full ratings matrix - fill the missing movies with 0s
 
     # The ratings dataframe is missing some movies - meaning some movies were not rated by anyone.
@@ -247,12 +249,12 @@ def predict_collaborative_filtering_itemitem(movies, users, ratings, predictions
     if(similarity == 1):
         similarity_matrix = np.corrcoef(ratings_matrix.T + 1e-9)
 
-    # Cosine similarity
+    # Cosine similarity first attempt
     # similarity_matrix = ratings_matrix.T.dot(ratings_matrix) + 1e-9
     # norms = np.array([np.sqrt(np.diagonal(similarity_matrix))])
     # similarity_matrix = (similarity_matrix / norms / norms.T)
 
-    # # Adjusted Cosine similarity (my attempt)
+    # # Adjusted Cosine similarity first attempt
     # avgs = ratings_description.groupby('userID').agg(['mean'])
     # avgs.drop(['movieID'], axis=1, inplace=True)
     # user_rating_avgs = avgs.to_numpy()
@@ -280,27 +282,32 @@ def predict_collaborative_filtering_itemitem(movies, users, ratings, predictions
     # noItems = len(ratings_transpose)
     #
     # adj_cosine_similarity_matrix = np.zeros((noItems, noItems))
-    # for idx, itemA in tqdm(enumerate(ratings_transpose)):
+    # for idx, itemA in enumerate(ratings_transpose):
     #     for idy, itemB in enumerate(ratings_transpose):
     #         adj_cosine_similarity_matrix[idx][idy] = adj_cosine_similarity(idx, idy)
     #         adj_cosine_similarity_matrix[idy][idx] = adj_cosine_similarity_matrix[idx][idy]
 
-    # Adjusted cosine similarity (github)
+    # Cosine for cosine and adj cosine similarities (idea from https://github.com/john-x-jiang/Recommending-System/blob/master/src/similarity_functions.py)
     def cosine(a, b):
-        p = a * b
-        c, d = p / b, p / a
-        c[np.isnan(c)] = 0
-        d[np.isnan(d)] = 0
+        # Vector multiplication
+        p = a*b
+        # Norm multiplication
+        c = p / b
+        d = p / a
         norm = np.linalg.norm(c) * np.linalg.norm(d)
+        # Division by 0
         if not norm:
             return 0
+        # Return cos
         return np.dot(a, b) / norm
 
+    # Cosine similarity matrix
     def cosineMatrix(ratings):
-        noitems = np.shape(ratings)[1]
-        sim = np.zeros((noitems, noitems))
-        for i in  tqdm(range(noitems)):
-            for j in  range(i, noitems):
+        no_items = np.shape(ratings)[1]
+        sim = np.zeros((no_items, no_items))
+        # Simple cosine similarity
+        for i in range(no_items):
+            for j in range(i, no_items):
                 sim[i][j] = cosine(ratings[:, i], ratings[:, j])
                 sim[j][i] = sim[i][j]
         return sim
@@ -308,24 +315,27 @@ def predict_collaborative_filtering_itemitem(movies, users, ratings, predictions
     if(similarity == 2):
         similarity_matrix = cosineMatrix(ratings_matrix +1e-9)
 
+    # Adjusted cosine similarity matrix
     def adjustedCosineMatrix(ratings):
-        nousers = np.shape(ratings)[0]
-        noitems = np.shape(ratings)[1]
-        sim = np.zeros((noitems, noitems))
-        user_avg_rating = np.zeros(nousers)
+        no_items = np.shape(ratings)[0]
+        no_users = np.shape(ratings)[1]
+        sim = np.zeros((no_users, no_users))
+        # Calculate average item rating to adjust for it
+        item_avg_rating = np.zeros(no_items)
         zero_items = 0
-        for u in tqdm(range(nousers)):
-            for i in range(noitems):
+        # Take care of items that were not rated by users
+        for u in range(no_items):
+            for i in range(no_users):
                 if (ratings[u, i] == 0):
                     zero_items += 1
-                user_avg_rating[u] += ratings[u, i]
-            user_avg_rating[u] /= zero_items
-        for i in tqdm(range(noitems)):
-            for j in range(i, noitems):
-                sim[i][j] = cosine(ratings[:, i] - user_avg_rating,
-                                   ratings[:, j] - user_avg_rating)
+                item_avg_rating[u] += ratings[u, i]
+            item_avg_rating[u] /= zero_items
+        # Calculate the similarity adjusting to item avg
+        for i in range(no_users):
+            for j in range(i, no_users):
+                sim[i][j] = cosine(ratings[:, i] - item_avg_rating,
+                                   ratings[:, j] - item_avg_rating)
                 sim[j][i] = sim[i][j]
-            # print i
         return sim
 
     if(similarity_matrix is None):
@@ -353,12 +363,10 @@ def predict_collaborative_filtering_itemitem(movies, users, ratings, predictions
 
         return sum_numer/sum_denomin
 
-
     # # Get the average rating of each user
     avgs = ratings_description.groupby('userID').agg(['mean'])
     avgs.drop(['movieID'], axis=1, inplace=True)
     user_rating_avgs = avgs.to_numpy()
-    print("user rating avgs", user_rating_avgs.shape)
 
     # Get the average rating of each movie
     # Copy the ratings matrix and calculate the mean over movies while not taking 0's in consideration.
@@ -374,11 +382,24 @@ def predict_collaborative_filtering_itemitem(movies, users, ratings, predictions
     # Use user avgs for total avg
     total_avg = np.mean(user_rating_avgs)
 
-    print("total avg", total_avg)
-    print("moveie rating", movie_rating_avgs[2555])
-
-    # Function 2
+    # Function 2 (Global Biases)
     def prediction_scoref2 (user, movie):
+        movie_avg = total_avg + movie_rating_avgs[movie] - total_avg + user_rating_avgs[user] - total_avg
+        sum_numer = 0
+        sum_denomin = 1e-9
+        for idx, movie_ratings in enumerate(ratings_matrix.T):
+            if (movie_ratings[user] == 0):
+                pass
+            elif (idx == movie):
+                pass
+            else:
+                sum_numer += similarity_matrix[movie, idx] * (movie_ratings[user] - (
+                            total_avg + movie_rating_avgs[idx] - total_avg + user_rating_avgs[user] - total_avg))
+                sum_denomin += similarity_matrix[movie, idx]
+        return movie_avg + sum_numer / sum_denomin
+
+    # Function 3
+    def prediction_scoref3 (user, movie):
         movie_avg = movie_rating_avgs[movie]
         sum_numer = 0
         # Add a small number to denominator to avoid division by 0
@@ -398,38 +419,20 @@ def predict_collaborative_filtering_itemitem(movies, users, ratings, predictions
         # print(movie_avg + sum_numer/sum_denomin)
         return movie_avg + sum_numer/sum_denomin
 
-    # Function 3
-
-    def prediction_scoref3(user, movie):
-        movie_avg = total_avg + movie_rating_avgs[movie] - total_avg + user_rating_avgs[user] - total_avg
-        sum_numer = 0
-        sum_denomin = 1e-9
-        for idx, movie_ratings in enumerate(ratings_matrix.T):
-            if (movie_ratings[user] == 0):
-                pass
-            elif (idx == movie):
-                pass
-            else:
-                sum_numer += similarity_matrix[movie, idx] * (movie_ratings[user] - (
-                            total_avg + movie_rating_avgs[idx] - total_avg + user_rating_avgs[user] - total_avg))
-                sum_denomin += similarity_matrix[movie, idx]
-        return movie_avg + sum_numer / sum_denomin
-
 
     # Creating the final predictions format
     # number_predictions = len(predictions)
-    # final_predictionsf1 = [[idx+1, prediction_scoref1(predictions.userID[idx]-1, predictions.movieID[idx]-1)] for idx in tqdm(range(0, number_predictions ))]
-    # final_predictionsf2 = [[idx+1, prediction_scoref2(predictions.userID[idx]-1, predictions.movieID[idx]-1)] for idx in tqdm(range(0, number_predictions ))]
-    # final_predictionsf3 = [[idx+1, prediction_scoref3(predictions.userID[idx]-1, predictions.movieID[idx]-1)] for idx in tqdm(range(0, number_predictions ))]
+    # final_predictionsf1 = [[idx+1, prediction_scoref1(predictions.userID[idx]-1, predictions.movieID[idx]-1)] for idx in range(0, number_predictions )]
+    # final_predictionsf2 = [[idx+1, prediction_scoref2(predictions.userID[idx]-1, predictions.movieID[idx]-1)] for idx in range(0, number_predictions )]
+    # final_predictionsf3 = [[idx+1, prediction_scoref3(predictions.userID[idx]-1, predictions.movieID[idx]-1)] for idx in range(0, number_predictions )]
     #
     # return final_predictionsf1, final_predictionsf2, final_predictionsf3
 
 
     # Enabling only the best-performing CF for recommender model combiner
     number_predictions = len(predictions)
-    best_prediction_cf = [prediction_scoref3(predictions.userID[idx]-1, predictions.movieID[idx]-1)[0] for idx in tqdm(range(0, number_predictions ))]
+    best_prediction_cf = [prediction_scoref3(predictions.userID[idx]-1, predictions.movieID[idx]-1)[0] for idx in range(0, number_predictions )]
     return best_prediction_cf
-
 
 
 #####
@@ -690,7 +693,7 @@ def predict_latent_factors_ALS(movies, users, ratings, predictions):
 
     newP, newQ = matrix_als(R, P, Q, k, rmse=True)
 
-    newR = predict_all(newP, newQ.T, b, b_u, b_i)
+    newR = predict_all(newP, newQ.T, 0, [], [])
 
     number_predictions = len(predictions)
     result = [[idx+1, newR[predictions.movieID[idx]-1, predictions.userID[idx]-1]] for idx in range(0, number_predictions)]
@@ -704,8 +707,7 @@ def predict_latent_factors_ALS(movies, users, ratings, predictions):
 #####
 
 def predict_CF_final():
-    result = predict_collaborative_filtering_itemitem(movies_description, users_description,
-                                                      ratings_description, predictions_description, 1)
+    result = predict_collaborative_filtering_itemitem(ratings_description, predictions_description, 1)
 
     return result
 
