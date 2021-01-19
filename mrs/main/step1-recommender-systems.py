@@ -1,12 +1,6 @@
 import numpy as np
 import pandas as pd
 import os.path
-from random import randint
-from tqdm import tqdm
-import matplotlib
-import matplotlib.pyplot as plt
-import uuid
-import time
 
 # -*- coding: utf-8 -*-
 """
@@ -471,26 +465,6 @@ def grid_search(samples, R, b, steps=500, gamma=0.01, lamda=0.01, rmse = False, 
                 print(f"k={k}, lr={lr}, rmse={rmse_score}", file=f)
 
 
-def plot_rmse(mse):
-    """
-    Plots the mean squared error over all steps
-    :param mse:
-    :return:
-    """
-    indeces = [i for i, j in mse]
-    mses = [j for i, j in mse]
-    with open('mse_bias_100s.txt', 'w') as f:
-        print(mses, file=f)
-    plt.figure(figsize=((16,4)))
-    plt.plot(indeces, mses)
-    plt.xticks(indeces, indeces)
-    plt.xlabel("Steps")
-    plt.ylabel("RMSE")
-    plt.grid(axis="y")
-    filename = time.strftime("%Y%m%d-%H%M%S")
-    plt.savefig(filename + '.png')
-
-
 def get_rmse(R, P, Q, b, b_u, b_i, bias):
     """
     Computes total mean squared error
@@ -549,7 +523,7 @@ def matrix_als(R, P, Q, k, steps=100, gamma=0.01, rmse = False, bias = False):
     rmse_data = []
     rmse_old = get_rmse(R, P, Q.T, 0, [], [], False)
 
-    for step in tqdm(range(steps)):
+    for step in range(steps):
         Q[Q < 0] = 0
         P = als_step(R, P, Q, k, gamma)
         P[P < 0] = 0
@@ -565,8 +539,6 @@ def matrix_als(R, P, Q, k, steps=100, gamma=0.01, rmse = False, bias = False):
             else:
                 rmse_data.append((step + 1, rmse_new))
                 rmse_old = rmse_new
-    if rmse:
-        plot_rmse(rmse_data)
 
     return P, Q
 
@@ -590,7 +562,7 @@ def matrix_factr(samples, R, P, Q, b, b_u, b_i, steps=200, gamma=0.005, lamda=0.
     rmse_old = get_rmse(R, P, Q, b, b_u, b_i, bias)
     rmse_data.append((0, rmse_old))
 
-    for step in tqdm(range(steps)):
+    for step in range(steps):
         np.random.shuffle(samples)
         for i, j, r in samples:
             # Error calculation
@@ -613,8 +585,6 @@ def matrix_factr(samples, R, P, Q, b, b_u, b_i, steps=200, gamma=0.005, lamda=0.
             else:
                 rmse_data.append((step + 1, rmse_new))
                 rmse_old = rmse_new
-    if rmse:
-        plot_rmse(rmse_data)
 
     return P, Q, b_u, b_i
 
@@ -725,6 +695,7 @@ def predict_latent_factors_ALS(movies, users, ratings, predictions):
     number_predictions = len(predictions)
     result = [[idx+1, newR[predictions.movieID[idx]-1, predictions.userID[idx]-1]] for idx in range(0, number_predictions)]
     return result
+
 
 #####
 ##
