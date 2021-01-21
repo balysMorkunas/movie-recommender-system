@@ -588,6 +588,35 @@ def matrix_factr(samples, R, P, Q, b, b_u, b_i, steps=200, gamma=0.005, lamda=0.
 
     return P, Q, b_u, b_i
 
+def lf_svd(ratings, predictions):
+    # R: Ratings matrix
+    R = ratings.to_numpy()
+    # k: number of features
+    k = 5
+
+    b = np.mean(R[np.where(R != 0)])
+
+    print("Running SVD ... ")
+    u, s, vh = np.linalg.svd(R, full_matrices=False)
+
+    s = np.diag(s)
+    s = s[0:k, 0:k]
+    u = u[:, 0:k]
+    vh = vh[0:k, :]
+
+    root = np.sqrt(s)
+ 
+    US = np.dot(u, root)
+    sV = np.dot(root, vh)
+    newR = np.dot(US, sV)
+
+    newR += b
+
+    number_predictions = len(predictions)
+    result = [[idx+1, newR[predictions.movieID[idx]-1, predictions.userID[idx]-1]] for idx in range(0, number_predictions)]
+    return result
+
+
 #-----------------------------------------------Prediction functions for LF-----------------------------------------------------------
 
 
