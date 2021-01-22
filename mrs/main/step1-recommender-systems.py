@@ -71,7 +71,6 @@ def predict_collaborative_filtering_useritem(ratings, predictions, similarity):
 
 
     # 2. Compute the utility matrix containing the similarities between users
-    # Idea from https://github.com/john-x-jiang/Recommending-System/blob/master/src/similarity_functions.py
 
     # Pearson correlation
     similarity_matrix = None
@@ -287,7 +286,7 @@ def predict_collaborative_filtering_itemitem(ratings, predictions, similarity):
     #         adj_cosine_similarity_matrix[idx][idy] = adj_cosine_similarity(idx, idy)
     #         adj_cosine_similarity_matrix[idy][idx] = adj_cosine_similarity_matrix[idx][idy]
 
-    # Cosine for cosine and adj cosine similarities (idea from https://github.com/john-x-jiang/Recommending-System/blob/master/src/similarity_functions.py)
+    # Cosine for cosine and adj cosine similarities
     def cosine(a, b):
         # Vector multiplication
         p = a*b
@@ -429,7 +428,7 @@ def predict_collaborative_filtering_itemitem(ratings, predictions, similarity):
     # return final_predictionsf1, final_predictionsf2, final_predictionsf3
 
 
-    # Enabling only the best-performing CF for recommender model combiner
+    # Enabling only the best-performing CF for recommender model combiner (function 3)
     number_predictions = len(predictions)
     best_prediction_cf = [prediction_scoref3(predictions.userID[idx]-1, predictions.movieID[idx]-1)[0] for idx in range(0, number_predictions )]
     return best_prediction_cf
